@@ -5,5 +5,6 @@ http://www.multimagie.com/English/SquaresOfSquaresSearch.htm (see January 18, 20
 
 ## Results
 
-- `2(x²y² + w²z²) - (wy + xz)²` has been checked up to 10,206,057,000,000 with
-no solutions
+- `2(x²y² + w²z²) - (wy + xz)²` has been checked up to 10,000,000,000,000 with no solutions
+- `2(x²y² + w²z²) - (wy - xz)²` has been checked up to 10,000,000,000,000 with no solutions
+- `(2y² - z²)x² + (2z² - y²)w²` has not been checked yet
