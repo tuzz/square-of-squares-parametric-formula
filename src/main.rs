@@ -4,24 +4,21 @@ use std::io::Write;
 fn main() {
     let num_threads = num_cpus::get();
 
-    // Comment in this code to continue checking the leftmost term:
-    // 2(x²y² + w²z²) - (wy + xz)²
-    //
-    let mut threads = (1..=num_threads).map(|start_number| {
+    let mut threads = (1..=num_threads).map(|i| {
         std::thread::spawn(move || {
-            let zero    = BigUint::new(vec![0]);
-            let one     = BigUint::new(vec![1]);
-            let two     = BigUint::new(vec![2]);
-            let three   = BigUint::new(vec![3]);
-            let four    = BigUint::new(vec![4]);
-            let six     = BigUint::new(vec![6]);
-            let million = BigUint::new(vec![1_000_000]);
+            let stride   = BigUint::new(vec![num_threads as u32]);
+            let thread   = BigUint::new(vec![i as u32]);
+            let interval = BigUint::new(vec![100_000_000]);
 
-            let mut n = BigUint::new(vec![start_number as u32]);
-            let increment = BigUint::new(vec![num_threads as u32]);
+            let zero     = BigUint::new(vec![0]);
+            let one      = BigUint::new(vec![1]);
+            let two      = BigUint::new(vec![2]);
+            let three    = BigUint::new(vec![3]);
+            let four     = BigUint::new(vec![4]);
+            let six      = BigUint::new(vec![6]);
 
-            // Skip numbers that have already been checked.
-            n += BigUint::new(vec![100_000]) * BigUint::new(vec![100_000_000]);
+            let mut n = read_progress_file() + thread;
+            if i == 1 { println!("Starting from n={}", n); }
 
             loop {
                 let w = &six * &n * &n + &six * &n + &two;
@@ -29,128 +26,59 @@ fn main() {
                 let y = &three * &n * &n + &two * &n;
                 let z = &three * &n * &n + &four * &n + &one;
 
-                let term1 = &x * &x * &y * &y;
-                let term2 = &w * &w * &z * &z;
-                let term3 = &two * (&term1 + &term2);
+                let xx = &x * &x;
+                let yy = &y * &y;
+                let zz = &z * &z;
+                let ww = &w * &w;
+                let wy = &w * &y;
+                let xz = &x * &z;
 
-                let term4 = &w * &y + &x * &z;
-                let term5 = &term4 * &term4;
+                let xxyy = &xx * &yy;
+                let wwzz = &ww * &zz;
 
-                // Calculate 2(x²y² + w²z²) - (wy + xz)².
-                let partial = &term3 - &term5;
-                let sqrt = partial.sqrt();
+                let common_term = &two * (&xxyy + &wwzz);
+                let wy_plus_xz = &wy + &xz;
+                let wy_minus_xz = &wy - &xz;
 
-                if &sqrt * &sqrt == partial {
-                    println!(">>>>>>>>>>> {}, {}", n, partial);
-                    break;
-                }
+                let term1 = &common_term - &wy_plus_xz * &wy_plus_xz;
+                let term2 = &common_term - &wy_minus_xz * &wy_minus_xz;
+                let term3 = (&two * &yy - &zz) * &xx + (&two * &zz - &yy) * &ww;
 
-                if &n % &million == zero {
-                    println!("{}", &n / &million);
-                    std::io::stdout().flush().unwrap();
-                }
+                let sqrt1 = term1.sqrt();
+                let sqrt2 = term2.sqrt();
+                let sqrt3 = term3.sqrt();
 
-                n += &increment;
+                if &sqrt1 * &sqrt1 == term1 { print_solution_and_exit(1, &term1, &sqrt1, &n, &w, &x, &y, &z); }
+                if &sqrt2 * &sqrt2 == term2 { print_solution_and_exit(2, &term2, &sqrt2, &n, &w, &x, &y, &z); }
+                if &sqrt3 * &sqrt3 == term3 { print_solution_and_exit(3, &term3, &sqrt3, &n, &w, &x, &y, &z); }
+
+                if &n % &interval == zero { write_progress_file(&n); }
+
+                n += &stride;
             }
         })
     }).collect::<Vec<_>>();
 
-    // let mut threads = (1..=num_threads).map(|start_number| {
-    //     std::thread::spawn(move || {
-    //         let zero    = BigUint::new(vec![0]);
-    //         let one     = BigUint::new(vec![1]);
-    //         let two     = BigUint::new(vec![2]);
-    //         let three   = BigUint::new(vec![3]);
-    //         let four    = BigUint::new(vec![4]);
-    //         let six     = BigUint::new(vec![6]);
-    //         let million = BigUint::new(vec![1_000_000]);
-
-    //         let mut n = BigUint::new(vec![start_number as u32]);
-    //         let increment = BigUint::new(vec![num_threads as u32]);
-
-    //         // Skip numbers that have already been checked.
-    //         n += BigUint::new(vec![100_000]) * BigUint::new(vec![100_000_000]);
-
-    //         loop {
-    //             let w = &six * &n * &n + &six * &n + &two;
-    //             let x = &two * &n + &one;
-    //             let y = &three * &n * &n + &two * &n;
-    //             let z = &three * &n * &n + &four * &n + &one;
-
-    //             let term1 = &x * &x * &y * &y;
-    //             let term2 = &w * &w * &z * &z;
-    //             let term3 = &two * (&term1 + &term2);
-
-    //             let term4 = &w * &y - &x * &z;
-    //             let term5 = &term4 * &term4;
-
-    //             // Calculate 2(x²y² + w²z²) - (wy - xz)².
-    //             let partial = &term3 - &term5;
-    //             let sqrt = partial.sqrt();
-
-    //             if &sqrt * &sqrt == partial {
-    //                 println!(">>>>>>>>>>> {}, {}", n, partial);
-    //                 break;
-    //             }
-
-    //             if &n % &million == zero {
-    //                 println!("{}", &n / &million);
-    //                 std::io::stdout().flush().unwrap();
-    //             }
-
-    //             n += &increment;
-    //         }
-    //     })
-    // }).collect::<Vec<_>>();
-
-    // let mut threads = (1..=num_threads).map(|start_number| {
-    //     std::thread::spawn(move || {
-    //         let zero    = BigUint::new(vec![0]);
-    //         let one     = BigUint::new(vec![1]);
-    //         let two     = BigUint::new(vec![2]);
-    //         let three   = BigUint::new(vec![3]);
-    //         let four    = BigUint::new(vec![4]);
-    //         let six     = BigUint::new(vec![6]);
-    //         let million = BigUint::new(vec![1_000_000]);
-
-    //         let mut n = BigUint::new(vec![start_number as u32]);
-    //         let increment = BigUint::new(vec![num_threads as u32]);
-
-    //         // Skip numbers that have already been checked.
-    //         n += BigUint::new(vec![100_000]) * BigUint::new(vec![100_000_000]);
-
-    //         loop {
-    //             let w = &six * &n * &n + &six * &n + &two;
-    //             let x = &two * &n + &one;
-    //             let y = &three * &n * &n + &two * &n;
-    //             let z = &three * &n * &n + &four * &n + &one;
-
-    //             let y2 = &y * &y;
-    //             let z2 = &z * &z;
-
-    //             let term1 = (&two * &y2 - &z2) * &x * &x;
-    //             let term2 = (&two * &z2 - &y2) * &w * &w;
-
-    //             // Calculate (2y² - z²)x² + (2z² - y²)w²
-    //             let partial = &term1 + &term2;
-    //             let sqrt = partial.sqrt();
-
-    //             if &sqrt * &sqrt == partial {
-    //                 println!(">>>>>>>>>>> {}, {}", n, partial);
-    //                 break;
-    //             }
-
-    //             if &n % &million == zero {
-    //                 println!("{}", &n / &million);
-    //                 std::io::stdout().flush().unwrap();
-    //             }
-
-    //             n += &increment;
-    //         }
-    //     })
-    // }).collect::<Vec<_>>();
-
     for thread in threads.drain(..) {
         thread.join().unwrap();
     }
+}
+
+fn print_solution_and_exit(position: u8, term: &BigUint, sqrt: &BigUint, n: &BigUint, w: &BigUint, x: &BigUint, y: &BigUint, z: &BigUint) {
+    println!("Found a square:\nterm{}={}\nsqrt={}\nn={}\nw={}\nx={}\ny={}\nz={}", position, term, sqrt, n, w, x, y, z);
+
+    std::io::stdout().flush().unwrap();
+    std::process::exit(0);
+}
+
+fn read_progress_file() -> BigUint {
+    let contents = std::fs::read_to_string("progress.txt").unwrap_or("1".to_string());
+
+    contents.parse::<BigUint>().unwrap()
+}
+
+fn write_progress_file(n: &BigUint) {
+    println!("Checked up to n={}", n);
+
+    std::fs::write("progress.txt", format!("{}", n)).unwrap();
 }
