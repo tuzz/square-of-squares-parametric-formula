@@ -1,60 +1,86 @@
-use num_bigint::BigUint;
+use reikna::factor::perfect_square;
 use std::io::Write;
 
 fn main() {
     let num_threads = num_cpus::get();
 
-    let mut threads = (1..=num_threads).map(|i| {
+    let mut threads = (0..num_threads).map(|thread| {
         std::thread::spawn(move || {
-            let stride   = BigUint::new(vec![num_threads as u32]);
-            let thread   = BigUint::new(vec![i as u32]);
-            let interval = BigUint::new(vec![100_000_000]);
-
-            let zero     = BigUint::new(vec![0]);
-            let one      = BigUint::new(vec![1]);
-            let two      = BigUint::new(vec![2]);
-            let three    = BigUint::new(vec![3]);
-            let four     = BigUint::new(vec![4]);
-            let six      = BigUint::new(vec![6]);
-
-            let mut n = read_progress_file() + thread;
-            if i == 1 { println!("Starting from n={}", n); }
+            let mut q = read_progress_file(thread) + 1;
+            println!("Starting from {} choose 4 on thread {}", q, thread);
 
             loop {
-                let w = &six * &n * &n + &six * &n + &two;
-                let x = &two * &n + &one;
-                let y = &three * &n * &n + &two * &n;
-                let z = &three * &n * &n + &four * &n + &one;
+                let qq = q * q;
+                let q4 = 4 * q;
 
-                let xx = &x * &x;
-                let yy = &y * &y;
-                let zz = &z * &z;
-                let ww = &w * &w;
-                let wy = &w * &y;
-                let xz = &x * &z;
+                for r in 1..q {
+                    let rr = r * r;
+                    let qqrr = qq * rr;
+                    let qr4 = q4 * r;
+                    let qqrr3 = 3 * qqrr;
 
-                let xxyy = &xx * &yy;
-                let wwzz = &ww * &zz;
+                    for p in 1..r {
+                        let pp = p * p;
+                        let pprr = pp * rr;
+                        let pqr4 = qr4 * p;
+                        let pprr3 = 3 * pprr;
 
-                let common_term = &two * (&xxyy + &wwzz);
-                let wy_plus_xz = &wy + &xz;
-                let wy_minus_xz = &wy - &xz;
+                        for s in 1..p {
+                            let ss = s * s;
+                            let ppss = pp * ss;
+                            let qqss = qq * ss;
+                            let pqrs4 = pqr4 * s;
+                            let ppss3 = 3 * ppss;
+                            let qqss3 = 3 * qqss;
 
-                let term1 = &common_term - &wy_plus_xz * &wy_plus_xz;
-                let term2 = &common_term - &wy_minus_xz * &wy_minus_xz;
-                let term3 = (&two * &yy - &zz) * &xx + (&two * &zz - &yy) * &ww;
+                            let mut squares = 0;
 
-                let sqrt1 = term1.sqrt();
-                let sqrt2 = term2.sqrt();
-                let sqrt3 = term3.sqrt();
+                            // [(qr)² + (ps)² + (pr)² + (qs)²]/2
+                            let mid_mid = (qqrr + ppss + pprr + qqss) / 2;
+                            if perfect_square(mid_mid) { squares += 1; }
 
-                if &sqrt1 * &sqrt1 == term1 { print_solution_and_exit(1, &term1, &sqrt1, &n, &w, &x, &y, &z); }
-                if &sqrt2 * &sqrt2 == term2 { print_solution_and_exit(2, &term2, &sqrt2, &n, &w, &x, &y, &z); }
-                if &sqrt3 * &sqrt3 == term3 { print_solution_and_exit(3, &term3, &sqrt3, &n, &w, &x, &y, &z); }
+                            // [(qr)² + (ps)² + (pr)² + (qs)²]/2 - 4pqrs
+                            if pqrs4 > mid_mid { continue; } // Skip negatives.
+                            let bot_mid = mid_mid - pqrs4;
+                            if perfect_square(bot_mid) { squares += 1; }
 
-                if &n % &interval == zero { write_progress_file(&n); }
+                            // [3(pr)² + 3(qs)² - (qr)² - (ps)²]/2
+                            let positive = pprr3 + qqss3;
+                            let negative = qqrr + ppss;
+                            if negative > positive { continue; } // Skip negatives.
+                            let mid_left = (positive - negative) / 2;
+                            if mid_left == bot_mid { continue; } // Skip duplicates.
+                            if perfect_square(mid_left) { squares += 1; }
 
-                n += &stride;
+                            if squares == 0 { continue; } // Not enough squares.
+
+                            // [3(qr)² + 3(ps)² - (pr)² - (qs)²]/2
+                            let positive = qqrr3 + ppss3;
+                            let negative = pprr + qqss;
+                            if negative > positive { continue; } // Skip negatives.
+                            let mid_right = (positive - negative) / 2;
+                            if perfect_square(mid_right) { squares += 1; }
+
+                            if squares == 1 { continue; } // Not enough squares.
+
+                            // [(qr)² + (ps)² + (pr)² + (qs)²]/2 + 4pqrs
+                            let top_mid = mid_mid + pqrs4;
+                            if top_mid == mid_right { continue; } // Skip duplicates.
+                            if perfect_square(top_mid) { squares += 1; }
+
+                            if squares == 2 { continue; } // Not enough squares.
+
+                            println!("\nFound a square:\np={}\nq={}\nr={}\ns={}\ntop_mid={}\nmid_left={}\nmid_mid={}\nmid_right={}\nbot_mid={}\n", p, q, r, s, top_mid, mid_left, mid_mid, mid_right, bot_mid);
+
+                            std::io::stdout().flush().unwrap();
+                            std::process::exit(0);
+                        }
+                    }
+                }
+
+                write_progress_file(q, thread);
+
+                q += num_threads as u64;
             }
         })
     }).collect::<Vec<_>>();
@@ -64,21 +90,19 @@ fn main() {
     }
 }
 
-fn print_solution_and_exit(position: u8, term: &BigUint, sqrt: &BigUint, n: &BigUint, w: &BigUint, x: &BigUint, y: &BigUint, z: &BigUint) {
-    println!("Found a square:\nterm{}={}\nsqrt={}\nn={}\nw={}\nx={}\ny={}\nz={}", position, term, sqrt, n, w, x, y, z);
+fn read_progress_file(thread: usize) -> u64 {
+    let filename = format!("progress-thread-{}.txt", thread);
 
-    std::io::stdout().flush().unwrap();
-    std::process::exit(0);
+    if let Ok(s) = std::fs::read_to_string(filename) {
+        s.parse().unwrap()
+    } else {
+        thread as u64
+    }
 }
 
-fn read_progress_file() -> BigUint {
-    let contents = std::fs::read_to_string("progress.txt").unwrap_or("1".to_string());
+fn write_progress_file(q: u64, thread: usize) {
+    println!("Checked {} choose 4 on thread {}", q, thread);
 
-    contents.parse::<BigUint>().unwrap()
-}
-
-fn write_progress_file(n: &BigUint) {
-    println!("Checked up to n={}", n);
-
-    std::fs::write("progress.txt", format!("{}", n)).unwrap();
+    let filename = format!("progress-thread-{}.txt", thread);
+    std::fs::write(filename, format!("{}", q)).unwrap();
 }
