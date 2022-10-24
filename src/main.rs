@@ -1,97 +1,77 @@
-use reikna::factor::perfect_square;
+use num_bigint::BigUint;
 use std::io::Write;
 
 fn main() {
-    let num_threads = num_cpus::get();
+    let (sender, receiver) = crossbeam_channel::bounded::<(u64, BigUint, BigUint, BigUint)>(1024);
 
-    let mut threads = (0..num_threads).map(|thread| {
+    let mut threads = (0..num_cpus::get()).map(|thread| {
+        let receiver = receiver.clone();
+
+        let one = BigUint::new(vec![1]);
+        let two = BigUint::new(vec![2]);
+
         std::thread::spawn(move || {
-            let mut q = read_progress_file(thread) + 1;
-            println!("Starting from {} choose 4 on thread {}", q, thread);
-
             loop {
-                let qq = q * q;
-                let q4 = 4 * q;
+                let (n, x, y, z) = receiver.recv().unwrap();
 
-                for r in 1..q {
-                    let rr = r * r;
-                    let qqrr = qq * rr;
-                    let qr4 = q4 * r;
-                    let qqrr3 = 3 * qqrr;
+                let xx = &x * &x;
+                let yy = &y * &y;
+                let zz = &z * &z;
 
-                    for p in 1..r {
-                        let pp = p * p;
-                        let pprr = pp * rr;
-                        let pqr4 = qr4 * p;
-                        let pprr3 = 3 * pprr;
+                let top_right = &xx + &yy * &zz;
+                let sqrt = top_right.sqrt();
+                if top_right == &sqrt * &sqrt { print_solution_and_exit(0, &top_right, &sqrt, n, &x, &y, &z); }
 
-                        for s in 1..p {
-                            let ss = s * s;
-                            let ppss = pp * ss;
-                            let qqss = qq * ss;
-                            let pqrs4 = pqr4 * s;
-                            let ppss3 = 3 * ppss;
-                            let qqss3 = 3 * qqss;
+                let bot_left = &xx * &zz + &yy;
+                let sqrt = bot_left.sqrt();
+                if bot_left == &sqrt * &sqrt { print_solution_and_exit(1, &bot_left, &sqrt, n, &x, &y, &z); }
 
-                            let mut squares = 0;
+                let mid_mid = (xx + yy) * (zz + &one) / &two;
+                let sqrt = mid_mid.sqrt();
+                if mid_mid == &sqrt * &sqrt { print_solution_and_exit(2, &mid_mid, &sqrt, n, &x, &y, &z); }
 
-                            // [(qr)² + (ps)² + (pr)² + (qs)²]/2
-                            let mid_mid = (qqrr + ppss + pprr + qqss) / 2;
-                            if perfect_square(mid_mid) { squares += 1; }
-
-                            // [(qr)² + (ps)² + (pr)² + (qs)²]/2 - 4pqrs
-                            if pqrs4 > mid_mid { continue; } // Skip negatives.
-                            let bot_mid = mid_mid - pqrs4;
-                            if perfect_square(bot_mid) { squares += 1; }
-
-                            // [3(pr)² + 3(qs)² - (qr)² - (ps)²]/2
-                            let positive = pprr3 + qqss3;
-                            let negative = qqrr + ppss;
-                            if negative > positive { continue; } // Skip negatives.
-                            let mid_left = (positive - negative) / 2;
-                            if mid_left == bot_mid { continue; } // Skip duplicates.
-                            if perfect_square(mid_left) { squares += 1; }
-
-                            if squares == 0 { continue; } // Not enough squares.
-
-                            // [3(qr)² + 3(ps)² - (pr)² - (qs)²]/2
-                            let positive = qqrr3 + ppss3;
-                            let negative = pprr + qqss;
-                            if negative > positive { continue; } // Skip negatives.
-                            let mid_right = (positive - negative) / 2;
-                            if perfect_square(mid_right) { squares += 1; }
-
-                            if squares == 1 { continue; } // Not enough squares.
-
-                            // [(qr)² + (ps)² + (pr)² + (qs)²]/2 + 4pqrs
-                            let top_mid = mid_mid + pqrs4;
-                            if top_mid == mid_right { continue; } // Skip duplicates.
-                            if perfect_square(top_mid) { squares += 1; }
-
-                            if squares == 2 { continue; } // Not enough squares.
-
-                            println!("\nFound a square:\np={}\nq={}\nr={}\ns={}\ntop_mid={}\nmid_left={}\nmid_mid={}\nmid_right={}\nbot_mid={}\n", p, q, r, s, top_mid, mid_left, mid_mid, mid_right, bot_mid);
-
-                            std::io::stdout().flush().unwrap();
-                            std::process::exit(0);
-                        }
-                    }
-                }
-
-                write_progress_file(q, thread);
-
-                q += num_threads as u64;
+                write_progress_file(n, thread);
             }
         })
     }).collect::<Vec<_>>();
 
+    let mut x = BigUint::new(vec![3]);
+    let mut y = BigUint::new(vec![1]);
+    let mut z = BigUint::new(vec![1]);
+
+    let two = BigUint::new(vec![2]);
+    let three = BigUint::new(vec![3]);
+
+    let start_n = lowest_unchecked_n();
+
+    for n in 0.. {
+        let x_next = &three * &x + &two * &z;
+        let y_next = x.clone();
+        let z_next = &x + &z;
+
+        if n % 2 == 1 && n >= start_n {
+            sender.send((n, x, y, z)).unwrap();
+        }
+
+        x = x_next;
+        y = y_next;
+        z = z_next;
+    }
+
     for thread in threads.drain(..) {
-        thread.join().unwrap();
+        let _ = thread.join();
     }
 }
 
+fn print_solution_and_exit(position: u8, term: &BigUint, sqrt: &BigUint, n: u64, x: &BigUint, y: &BigUint, z: &BigUint) {
+    println!("Found a square:\nterm{}={}\nsqrt={}\nn={}\nx={}\ny={}\nz={}", position, term, sqrt, n, x, y, z);
+
+    std::io::stdout().flush().unwrap();
+    std::process::exit(0);
+}
+
 fn read_progress_file(thread: usize) -> u64 {
-    let filename = format!("progress-thread-{}.txt", thread);
+    let filename = format!("progress-v3-thread-{}.txt", thread);
 
     if let Ok(s) = std::fs::read_to_string(filename) {
         s.parse().unwrap()
@@ -100,9 +80,27 @@ fn read_progress_file(thread: usize) -> u64 {
     }
 }
 
-fn write_progress_file(q: u64, thread: usize) {
-    println!("Checked {} choose 4 on thread {}", q, thread);
+fn write_progress_file(n: u64, thread: usize) {
+    println!("Checked n={} on thread {}", n, thread);
 
-    let filename = format!("progress-thread-{}.txt", thread);
-    std::fs::write(filename, format!("{}", q)).unwrap();
+    let filename = format!("progress-v3-thread-{}.txt", thread);
+    std::fs::write(filename, format!("{}", n)).unwrap();
+}
+
+fn lowest_unchecked_n() -> u64 {
+    let mut checked = (0..num_cpus::get()).map(|i| read_progress_file(i)).collect::<Vec<_>>();
+    checked.sort();
+
+    if checked.is_empty() { return 0; }
+
+    for pairs in checked.windows(2) {
+        let expected = pairs[0] + 2;
+        let actual = pairs[1];
+
+        if expected != actual {
+            return expected;
+        }
+    }
+
+    return checked.last().unwrap() + 1;
 }
