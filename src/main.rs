@@ -37,7 +37,15 @@ fn main() {
 
                             // [(qr)² + (ps)² + (pr)² + (qs)²]/2
                             let mid_mid = (qqrr + ppss + pprr + qqss) / 2;
-                            if perfect_square(mid_mid) { squares += 1; }
+
+                            // > There are no more magic squares which use 7 or more squares which have a
+                            // > non-square central cell up to 10^14, or a square central cell up to 10^28.
+                            //
+                            // https://benchaffin.com/magic-squares/magic-squares.html#results
+                            //
+                            // For this term to exceed 10^28, the variables would need to be > 8,408,964
+                            // which would require checking ~2*10^26 squares which isn't feasible.
+                            if perfect_square(mid_mid) { continue; }
 
                             // [(qr)² + (ps)² + (pr)² + (qs)²]/2 - 4pqrs
                             if pqrs4 > mid_mid { continue; } // Skip negatives.
