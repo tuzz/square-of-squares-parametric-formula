@@ -1,94 +1,76 @@
-use reikna::factor::perfect_square;
+use num_bigint::BigUint;
 use std::io::Write;
 
 fn main() {
     let num_threads = num_cpus::get();
 
-    let mut threads = (0..num_threads).map(|thread| {
+    let mut threads = (0..num_threads).map(|i| {
         std::thread::spawn(move || {
-            let mut q = read_progress_file(thread) + 1;
-            println!("Starting from {} choose 4 on thread {}", q, thread);
+            let stride = BigUint::new(vec![num_threads as u32]);
+            let thread   = BigUint::new(vec![i as u32]);
+            let interval = BigUint::new(vec![100_000_000]);
+
+            let zero = BigUint::new(vec![0]);
+            let one = BigUint::new(vec![1]);
+            let two = BigUint::new(vec![2]);
+            let four = BigUint::new(vec![4]);
+            let eight = BigUint::new(vec![8]);
+            let twelve = BigUint::new(vec![12]);
+            let thirteen = BigUint::new(vec![13]);
+            let twenty_four = BigUint::new(vec![24]);
+            let twenty_six = BigUint::new(vec![26]);
+            let thirty_eight = BigUint::new(vec![38]);
+            let forty_nine = BigUint::new(vec![49]);
+            let fifty_one = BigUint::new(vec![51]);
+            let one_o_one = BigUint::new(vec![101]);
+            let one_o_two = BigUint::new(vec![102]);
+            let one_fifty_one = BigUint::new(vec![151]);
+
+            let mut z = read_progress_file() + &thread + &one;
+            println!("Starting from {} on thread {}", &z, thread);
 
             loop {
-                let qq = q * q;
-                let q4 = 4 * q;
+                'block: {
+                    let z4 = &z * &four;
+                    let z8 = &z * &eight;
+                    let zz = &z * &z;
+                    let zz2 = &two * &zz;
+                    let zz2_p1 = &zz2 + &one;
+                    let zz2_p1_sq = &zz2_p1 * &zz2_p1;
+                    let zz2_p1_sq_m49 = &forty_nine * &zz2_p1_sq;
 
-                for r in 1..q {
-                    let rr = r * r;
-                    let qqrr = qq * rr;
-                    let qr4 = q4 * r;
-                    let qqrr3 = 3 * qqrr;
+                    let mut squares = 0;
 
-                    for p in 1..r {
-                        let pp = p * p;
-                        let pprr = pp * rr;
-                        let pqr4 = qr4 * p;
-                        let pprr3 = 3 * pprr;
+                    let b = &zz2_p1_sq_m49 - &z4 * (&zz2_p1 + &one_o_one * &z);
+                    let sqrt = b.sqrt();
+                    if &sqrt * &sqrt == b { squares += 1; }
 
-                        for s in 1..p {
-                            let ss = s * s;
-                            let ppss = pp * ss;
-                            let qqss = qq * ss;
-                            let pqrs4 = pqr4 * s;
-                            let ppss3 = 3 * ppss;
-                            let qqss3 = 3 * qqss;
+                    let c = &zz2_p1_sq + &z8 * (&twenty_six * &zz + &thirty_eight * &z + &thirteen);
+                    let sqrt = c.sqrt();
+                    if &sqrt * &sqrt == c { squares += 1; }
 
-                            let mut squares = 0;
+                    let g = &zz2_p1_sq_m49 + &z8 * (&twenty_four * &zz - &thirteen * &z + &twelve);
+                    let sqrt = g.sqrt();
+                    if &sqrt * &sqrt == g { squares += 1; }
 
-                            // [(qr)² + (ps)² + (pr)² + (qs)²]/2
-                            let mid_mid = (qqrr + ppss + pprr + qqss) / 2;
+                    if squares == 0 { break 'block; }
 
-                            // > There are no more magic squares which use 7 or more squares which have a
-                            // > non-square central cell up to 10^14, or a square central cell up to 10^28.
-                            //
-                            // https://benchaffin.com/magic-squares/magic-squares.html#results
-                            //
-                            // For this term to exceed 10^28, the variables would need to be > 8,408,964
-                            // which would require checking ~2*10^26 squares which isn't feasible.
-                            if perfect_square(mid_mid) { continue; }
+                    let h = &zz2_p1_sq + &z4 * (&one_o_two * &zz + &one_fifty_one * &z + &fifty_one);
+                    let sqrt = h.sqrt();
+                    if &sqrt * &sqrt == h { squares += 1; }
 
-                            // [(qr)² + (ps)² + (pr)² + (qs)²]/2 - 4pqrs
-                            if pqrs4 > mid_mid { continue; } // Skip negatives.
-                            let bot_mid = mid_mid - pqrs4;
-                            if perfect_square(bot_mid) { squares += 1; }
+                    if squares == 1 { break 'block; }
 
-                            // [3(pr)² + 3(qs)² - (qr)² - (ps)²]/2
-                            let positive = pprr3 + qqss3;
-                            let negative = qqrr + ppss;
-                            if negative > positive { continue; } // Skip negatives.
-                            let mid_left = (positive - negative) / 2;
-                            if mid_left == bot_mid { continue; } // Skip duplicates.
-                            if perfect_square(mid_left) { squares += 1; }
-
-                            if squares == 0 { continue; } // Not enough squares.
-
-                            // [3(qr)² + 3(ps)² - (pr)² - (qs)²]/2
-                            let positive = qqrr3 + ppss3;
-                            let negative = pprr + qqss;
-                            if negative > positive { continue; } // Skip negatives.
-                            let mid_right = (positive - negative) / 2;
-                            if perfect_square(mid_right) { squares += 1; }
-
-                            if squares == 1 { continue; } // Not enough squares.
-
-                            // [(qr)² + (ps)² + (pr)² + (qs)²]/2 + 4pqrs
-                            let top_mid = mid_mid + pqrs4;
-                            if top_mid == mid_right { continue; } // Skip duplicates.
-                            if perfect_square(top_mid) { squares += 1; }
-
-                            if squares == 2 { continue; } // Not enough squares.
-
-                            println!("\nFound a square:\np={}\nq={}\nr={}\ns={}\ntop_mid={}\nmid_left={}\nmid_mid={}\nmid_right={}\nbot_mid={}\n", p, q, r, s, top_mid, mid_left, mid_mid, mid_right, bot_mid);
-
-                            std::io::stdout().flush().unwrap();
-                            std::process::exit(0);
-                        }
-                    }
+                    println!("Found a square: z={}, b={}, c={}, g={}, h={}", z, b, c, g, h);
+                    std::io::stdout().flush().unwrap();
+                    std::process::exit(0);
                 }
 
-                write_progress_file(q, thread);
+                if &z % &interval == zero {
+                    write_progress_file(&z);
+                }
 
-                q += num_threads as u64;
+                z += &stride;
             }
         })
     }).collect::<Vec<_>>();
@@ -98,19 +80,16 @@ fn main() {
     }
 }
 
-fn read_progress_file(thread: usize) -> u64 {
-    let filename = format!("progress-thread-{}.txt", thread);
-
-    if let Ok(s) = std::fs::read_to_string(filename) {
+fn read_progress_file() -> BigUint {
+    if let Ok(s) = std::fs::read_to_string("progress-v3.txt") {
         s.parse().unwrap()
     } else {
-        thread as u64
+        BigUint::new(vec![1])
     }
 }
 
-fn write_progress_file(q: u64, thread: usize) {
-    println!("Checked {} choose 4 on thread {}", q, thread);
+fn write_progress_file(z: &BigUint) {
+    println!("Checked up to {}", z);
 
-    let filename = format!("progress-thread-{}.txt", thread);
-    std::fs::write(filename, format!("{}", q)).unwrap();
+    std::fs::write("progress-v3.txt", format!("{}", z)).unwrap();
 }
