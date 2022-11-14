@@ -1,0 +1,47 @@
+int16 b, c, d, f, g, h, i;
+int31 a2, e2;
+
+b2 = b * b;
+c2 = c * c;
+d2 = d * d;
+f2 = f * f;
+g2 = g * g;
+h2 = h * h;
+i2 = i * i;
+
+invariant [b, c, d, f, g, h, i].uniq?;
+invariant [b, c, d, f, g, h, i].all?(*positive?);
+invariant a2 >= 0;
+invariant e2 >= 0;
+
+invariant a2 != b2;
+invariant a2 != c2;
+invariant a2 != d2;
+invariant a2 != e2;
+invariant a2 != f2;
+invariant a2 != g2;
+invariant a2 != h2;
+invariant a2 != i2;
+
+invariant e2 != b2;
+invariant e2 != c2;
+invariant e2 != d2;
+invariant e2 != f2;
+invariant e2 != g2;
+invariant e2 != h2;
+invariant e2 != i2;
+
+sum = e2 + e2 + e2;
+
+invariant sum == a2 + b2 + c2;
+invariant sum == d2 + e2 + f2;
+invariant sum == g2 + h2 + i2;
+
+invariant sum == a2 + d2 + g2;
+invariant sum == b2 + e2 + h2;
+invariant sum == c2 + f2 + i2;
+
+invariant sum == a2 + e2 + i2;
+invariant sum == c2 + e2 + g2;
+
+expose a2, b2, c2, d2, e2, f2, g2, h2, i2;
